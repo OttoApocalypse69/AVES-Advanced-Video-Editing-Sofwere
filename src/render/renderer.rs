@@ -7,15 +7,24 @@ use crate::decode::decoder::VideoFrame;
 use crate::render::compositor::Compositor;
 
 /// Error type for rendering operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum RenderError {
-    #[error("wgpu error: {0}")]
     Wgpu(String),
-    #[error("Surface error: {0}")]
     Surface(String),
-    #[error("Invalid layer: {0}")]
     InvalidLayer(String),
 }
+
+impl std::fmt::Display for RenderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RenderError::Wgpu(msg) => write!(f, "wgpu error: {}", msg),
+            RenderError::Surface(msg) => write!(f, "Surface error: {}", msg),
+            RenderError::InvalidLayer(msg) => write!(f, "Invalid layer: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for RenderError {}
 
 /// Transform parameters for a video layer
 /// All coordinates are normalized (0.0-1.0) relative to output dimensions

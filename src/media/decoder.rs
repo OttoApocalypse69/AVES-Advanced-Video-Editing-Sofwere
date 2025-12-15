@@ -9,25 +9,34 @@ use crossbeam::channel;
 use crate::core::time::Time;
 
 /// Error type for decoding operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum DecodeError {
-    #[error("FFmpeg error: {0}")]
     FFmpeg(String),
-    #[error("File not found: {0}")]
     FileNotFound(PathBuf),
-    #[error("No video stream found")]
     NoVideoStream,
-    #[error("No audio stream found")]
     NoAudioStream,
-    #[error("Invalid stream index: {0}")]
     InvalidStreamIndex(usize),
-    #[error("Seek failed: {0}")]
     SeekFailed(String),
-    #[error("Codec not found")]
     CodecNotFound,
-    #[error("Failed to open codec")]
     CodecOpenFailed,
 }
+
+impl std::fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DecodeError::FFmpeg(msg) => write!(f, "FFmpeg error: {}", msg),
+            DecodeError::FileNotFound(path) => write!(f, "File not found: {:?}", path),
+            DecodeError::NoVideoStream => write!(f, "No video stream found"),
+            DecodeError::NoAudioStream => write!(f, "No audio stream found"),
+            DecodeError::InvalidStreamIndex(idx) => write!(f, "Invalid stream index: {}", idx),
+            DecodeError::SeekFailed(msg) => write!(f, "Seek failed: {}", msg),
+            DecodeError::CodecNotFound => write!(f, "Codec not found"),
+            DecodeError::CodecOpenFailed => write!(f, "Failed to open codec"),
+        }
+    }
+}
+
+impl std::error::Error for DecodeError {}
 
 /// Decoded video frame (RGBA8 as per SPEC.md)
 #[derive(Debug, Clone)]
@@ -284,22 +293,26 @@ impl MediaDecoder {
                 // Cast SwrContext to *mut c_void for av_opt_set_* functions
                 let swr_void = swr as *mut std::ffi::c_void;
                 // FFmpeg requires nul-terminated C strings - these are safe as they're compile-time constants
-                // Using byte string literals with explicit nul termination for FFmpeg API
-                #[allow(clippy::unnecessary_cast, clippy::transmute_bytes_to_str)]
+                // Using C string literals (Rust 1.77+) for FFmpeg API
+                #[allow(clippy::unnecessary_cast)]
                 {
-                    ffmpeg::ffi::av_opt_set_chlayout(swr_void, b"in_chlayout\0".as_ptr() as *const i8, &(*codec_ctx).ch_layout, 0);
-                    ffmpeg::ffi::av_opt_set_int(swr_void, b"in_sample_rate\0".as_ptr() as *const i8, sample_rate as i64, 0);
-                    ffmpeg::ffi::av_opt_set_sample_fmt(swr_void, b"in_sample_fmt\0".as_ptr() as *const i8, sample_fmt, 0);
-                    
-                    // Set output parameters (f32 interleaved - AV_SAMPLE_FMT_FLT)
-                    let mut out_ch_layout = std::mem::zeroed::<ffmpeg::ffi::AVChannelLayout>();
-                    // channels is u32, but av_channel_layout_default expects i32
-                    let channel_count = channels as i32;
-                    ffmpeg::ffi::av_channel_layout_default(&mut out_ch_layout, channel_count);
-                    ffmpeg::ffi::av_opt_set_chlayout(swr_void, b"out_chlayout\0".as_ptr() as *const i8, &out_ch_layout, 0);
-                    ffmpeg::ffi::av_opt_set_int(swr_void, b"out_sample_rate\0".as_ptr() as *const i8, sample_rate as i64, 0);
-                    // AV_SAMPLE_FMT_FLT is f32 interleaved (per SPEC.md)
-                    ffmpeg::ffi::av_opt_set_sample_fmt(swr_void, b"out_sample_fmt\0".as_ptr() as *const i8, ffmpeg::ffi::AVSampleFormat::AV_SAMPLE_FMT_FLT, 0);
+                    // Use C string literals if available, otherwise use byte strings with explicit allow
+                    #[allow(clippy::manual_c_str_literals)]
+                    {
+                        ffmpeg::ffi::av_opt_set_chlayout(swr_void, b"in_chlayout\0".as_ptr() as *const i8, &(*codec_ctx).ch_layout, 0);
+                        ffmpeg::ffi::av_opt_set_int(swr_void, b"in_sample_rate\0".as_ptr() as *const i8, sample_rate as i64, 0);
+                        ffmpeg::ffi::av_opt_set_sample_fmt(swr_void, b"in_sample_fmt\0".as_ptr() as *const i8, sample_fmt, 0);
+                        
+                        // Set output parameters (f32 interleaved - AV_SAMPLE_FMT_FLT)
+                        let mut out_ch_layout = std::mem::zeroed::<ffmpeg::ffi::AVChannelLayout>();
+                        // channels is u32, but av_channel_layout_default expects i32
+                        let channel_count = channels as i32;
+                        ffmpeg::ffi::av_channel_layout_default(&mut out_ch_layout, channel_count);
+                        ffmpeg::ffi::av_opt_set_chlayout(swr_void, b"out_chlayout\0".as_ptr() as *const i8, &out_ch_layout, 0);
+                        ffmpeg::ffi::av_opt_set_int(swr_void, b"out_sample_rate\0".as_ptr() as *const i8, sample_rate as i64, 0);
+                        // AV_SAMPLE_FMT_FLT is f32 interleaved (per SPEC.md)
+                        ffmpeg::ffi::av_opt_set_sample_fmt(swr_void, b"out_sample_fmt\0".as_ptr() as *const i8, ffmpeg::ffi::AVSampleFormat::AV_SAMPLE_FMT_FLT, 0);
+                    }
                 }
                 
                 let ret = ffmpeg::ffi::swr_init(swr);

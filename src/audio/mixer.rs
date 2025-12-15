@@ -7,12 +7,27 @@ use crate::audio::buffer::AudioBuffer;
 use crate::decode::decoder::Decoder;
 
 /// Error type for audio mixing operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum MixerError {
-    #[error("Decode error: {0}")]
-    Decode(#[from] crate::decode::decoder::DecodeError),
-    #[error("No audio clip at position")]
+    Decode(crate::decode::decoder::DecodeError),
     NoClip,
+}
+
+impl std::fmt::Display for MixerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MixerError::Decode(e) => write!(f, "Decode error: {}", e),
+            MixerError::NoClip => write!(f, "No audio clip at position"),
+        }
+    }
+}
+
+impl std::error::Error for MixerError {}
+
+impl From<crate::decode::decoder::DecodeError> for MixerError {
+    fn from(err: crate::decode::decoder::DecodeError) -> Self {
+        MixerError::Decode(err)
+    }
 }
 
 /// Audio mixer that combines audio from timeline tracks

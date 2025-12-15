@@ -7,21 +7,30 @@ use crate::core::time::Time;
 use crate::decode::stream_info::{VideoStreamInfo, AudioStreamInfo};
 
 /// Error type for decoding operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum DecodeError {
-    #[error("FFmpeg error: {0}")]
     FFmpeg(String),
-    #[error("File not found: {0}")]
     FileNotFound(PathBuf),
-    #[error("No video stream found")]
     NoVideoStream,
-    #[error("No audio stream found")]
     NoAudioStream,
-    #[error("Invalid stream index: {0}")]
     InvalidStreamIndex(usize),
-    #[error("Seek failed")]
     SeekFailed,
 }
+
+impl std::fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DecodeError::FFmpeg(msg) => write!(f, "FFmpeg error: {}", msg),
+            DecodeError::FileNotFound(path) => write!(f, "File not found: {:?}", path),
+            DecodeError::NoVideoStream => write!(f, "No video stream found"),
+            DecodeError::NoAudioStream => write!(f, "No audio stream found"),
+            DecodeError::InvalidStreamIndex(idx) => write!(f, "Invalid stream index: {}", idx),
+            DecodeError::SeekFailed => write!(f, "Seek failed"),
+        }
+    }
+}
+
+impl std::error::Error for DecodeError {}
 
 /// Decoded video frame (RGBA8 as per SPEC.md)
 #[derive(Debug, Clone)]

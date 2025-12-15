@@ -13,22 +13,67 @@ use crate::audio::mixer::{AudioMixer, MixerError};
 use crate::decode::decoder::Decoder;
 
 /// Error type for audio playback
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum AudioPlayerError {
-    #[error("cpal error: {0}")]
-    Cpal(#[from] cpal::StreamError),
-    #[error("cpal default config error: {0}")]
-    DefaultConfig(#[from] cpal::DefaultStreamConfigError),
-    #[error("cpal build stream error: {0}")]
-    BuildStream(#[from] cpal::BuildStreamError),
-    #[error("cpal play stream error: {0}")]
-    PlayStream(#[from] cpal::PlayStreamError),
-    #[error("cpal pause stream error: {0}")]
-    PauseStream(#[from] cpal::PauseStreamError),
-    #[error("Mixer error: {0}")]
-    Mixer(#[from] MixerError),
-    #[error("No audio device available")]
+    Cpal(cpal::StreamError),
+    DefaultConfig(cpal::DefaultStreamConfigError),
+    BuildStream(cpal::BuildStreamError),
+    PlayStream(cpal::PlayStreamError),
+    PauseStream(cpal::PauseStreamError),
+    Mixer(MixerError),
     NoDevice,
+}
+
+impl std::fmt::Display for AudioPlayerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AudioPlayerError::Cpal(e) => write!(f, "cpal error: {}", e),
+            AudioPlayerError::DefaultConfig(e) => write!(f, "cpal default config error: {}", e),
+            AudioPlayerError::BuildStream(e) => write!(f, "cpal build stream error: {}", e),
+            AudioPlayerError::PlayStream(e) => write!(f, "cpal play stream error: {}", e),
+            AudioPlayerError::PauseStream(e) => write!(f, "cpal pause stream error: {}", e),
+            AudioPlayerError::Mixer(e) => write!(f, "Mixer error: {}", e),
+            AudioPlayerError::NoDevice => write!(f, "No audio device available"),
+        }
+    }
+}
+
+impl std::error::Error for AudioPlayerError {}
+
+impl From<cpal::StreamError> for AudioPlayerError {
+    fn from(err: cpal::StreamError) -> Self {
+        AudioPlayerError::Cpal(err)
+    }
+}
+
+impl From<cpal::DefaultStreamConfigError> for AudioPlayerError {
+    fn from(err: cpal::DefaultStreamConfigError) -> Self {
+        AudioPlayerError::DefaultConfig(err)
+    }
+}
+
+impl From<cpal::BuildStreamError> for AudioPlayerError {
+    fn from(err: cpal::BuildStreamError) -> Self {
+        AudioPlayerError::BuildStream(err)
+    }
+}
+
+impl From<cpal::PlayStreamError> for AudioPlayerError {
+    fn from(err: cpal::PlayStreamError) -> Self {
+        AudioPlayerError::PlayStream(err)
+    }
+}
+
+impl From<cpal::PauseStreamError> for AudioPlayerError {
+    fn from(err: cpal::PauseStreamError) -> Self {
+        AudioPlayerError::PauseStream(err)
+    }
+}
+
+impl From<MixerError> for AudioPlayerError {
+    fn from(err: MixerError) -> Self {
+        AudioPlayerError::Mixer(err)
+    }
 }
 
 /// Audio player using cpal

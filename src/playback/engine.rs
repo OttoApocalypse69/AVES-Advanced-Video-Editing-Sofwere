@@ -29,14 +29,35 @@ pub enum PlaybackResponse {
 }
 
 /// Error type for playback engine
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum PlaybackError {
-    #[error("Audio error: {0}")]
-    Audio(#[from] crate::audio::player::AudioPlayerError),
-    #[error("Decode error: {0}")]
-    Decode(#[from] crate::decode::decoder::DecodeError),
-    #[error("Thread error: {0}")]
+    Audio(crate::audio::player::AudioPlayerError),
+    Decode(crate::decode::decoder::DecodeError),
     Thread(String),
+}
+
+impl std::fmt::Display for PlaybackError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlaybackError::Audio(e) => write!(f, "Audio error: {}", e),
+            PlaybackError::Decode(e) => write!(f, "Decode error: {}", e),
+            PlaybackError::Thread(msg) => write!(f, "Thread error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for PlaybackError {}
+
+impl From<crate::audio::player::AudioPlayerError> for PlaybackError {
+    fn from(err: crate::audio::player::AudioPlayerError) -> Self {
+        PlaybackError::Audio(err)
+    }
+}
+
+impl From<crate::decode::decoder::DecodeError> for PlaybackError {
+    fn from(err: crate::decode::decoder::DecodeError) -> Self {
+        PlaybackError::Decode(err)
+    }
 }
 
 /// Main playback engine

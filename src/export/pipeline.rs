@@ -7,14 +7,35 @@ use crate::export::encoder::{Encoder, EncodeError};
 use crate::decode::decoder::{Decoder, DecodeError};
 
 /// Error type for export operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum ExportError {
-    #[error("Encode error: {0}")]
-    Encode(#[from] EncodeError),
-    #[error("Decode error: {0}")]
-    Decode(#[from] DecodeError),
-    #[error("Timeline error: {0}")]
+    Encode(EncodeError),
+    Decode(DecodeError),
     Timeline(String),
+}
+
+impl std::fmt::Display for ExportError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExportError::Encode(e) => write!(f, "Encode error: {}", e),
+            ExportError::Decode(e) => write!(f, "Decode error: {}", e),
+            ExportError::Timeline(msg) => write!(f, "Timeline error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for ExportError {}
+
+impl From<EncodeError> for ExportError {
+    fn from(err: EncodeError) -> Self {
+        ExportError::Encode(err)
+    }
+}
+
+impl From<DecodeError> for ExportError {
+    fn from(err: DecodeError) -> Self {
+        ExportError::Decode(err)
+    }
 }
 
 /// Export settings

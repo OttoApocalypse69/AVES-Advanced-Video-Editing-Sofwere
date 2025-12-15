@@ -8,13 +8,22 @@ use crate::render::renderer::Layer;
 use crate::render::shader::{compile_shader, VERTEX_SHADER, FRAGMENT_SHADER};
 
 /// Error type for compositor operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum CompositorError {
-    #[error("wgpu error: {0}")]
     Wgpu(String),
-    #[error("Surface error: {0}")]
     Surface(String),
 }
+
+impl std::fmt::Display for CompositorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompositorError::Wgpu(msg) => write!(f, "wgpu error: {}", msg),
+            CompositorError::Surface(msg) => write!(f, "Surface error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for CompositorError {}
 
 /// Uniform buffer data for layer transforms
 #[repr(C)]
@@ -56,14 +65,29 @@ impl Compositor {
             .map_err(|e| CompositorError::Surface(e.to_string()))?;
         let surface: Surface<'static> = unsafe { std::mem::transmute(surface_raw) };
 
-        let adapter = pollster::block_on(instance.request_adapter(&RequestAdapterOptions {
+        // Use tokio runtime to block on async operations
+        // If no runtime is available, create a temporary one
+        let rt = match tokio::runtime::Handle::try_current() {
+            Ok(handle) => handle,
+            Err(_) => {
+                // Create a temporary runtime if none exists
+                // This is safe because we're in the render thread (per SPEC)
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| CompositorError::Wgpu(format!("Failed to create tokio runtime: {}", e)))?;
+                rt.handle().clone()
+            }
+        };
+        
+        let adapter = rt.block_on(instance.request_adapter(&RequestAdapterOptions {
             power_preference: PowerPreference::default(),
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
         }))
         .ok_or_else(|| CompositorError::Wgpu("No adapter found".to_string()))?;
 
-        let (device, queue) = pollster::block_on(adapter.request_device(
+        let (device, queue) = rt.block_on(adapter.request_device(
             &DeviceDescriptor {
                 label: None,
                 required_features: Features::empty(),

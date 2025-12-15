@@ -119,28 +119,79 @@ use std::sync::Arc;
 use crate::core::time::{Time, from_seconds};
 
 /// Error type for audio playback operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum AudioError {
-    #[error("cpal stream error: {0}")]
-    Stream(#[from] cpal::StreamError),
-    #[error("cpal device error: {0}")]
-    Device(#[from] cpal::DevicesError),
-    #[error("cpal backend error: {0}")]
-    Backend(#[from] cpal::BackendSpecificError),
-    #[error("cpal default config error: {0}")]
-    DefaultConfig(#[from] cpal::DefaultStreamConfigError),
-    #[error("cpal build stream error: {0}")]
-    BuildStream(#[from] cpal::BuildStreamError),
-    #[error("cpal play stream error: {0}")]
-    PlayStream(#[from] cpal::PlayStreamError),
-    #[error("cpal pause stream error: {0}")]
-    PauseStream(#[from] cpal::PauseStreamError),
-    #[error("No audio output device available")]
+    Stream(cpal::StreamError),
+    Device(cpal::DevicesError),
+    Backend(cpal::BackendSpecificError),
+    DefaultConfig(cpal::DefaultStreamConfigError),
+    BuildStream(cpal::BuildStreamError),
+    PlayStream(cpal::PlayStreamError),
+    PauseStream(cpal::PauseStreamError),
     NoDevice,
-    #[error("Invalid stream configuration")]
     InvalidConfig,
-    #[error("Playback not started")]
     NotStarted,
+}
+
+impl std::fmt::Display for AudioError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AudioError::Stream(e) => write!(f, "cpal stream error: {}", e),
+            AudioError::Device(e) => write!(f, "cpal device error: {}", e),
+            AudioError::Backend(e) => write!(f, "cpal backend error: {}", e),
+            AudioError::DefaultConfig(e) => write!(f, "cpal default config error: {}", e),
+            AudioError::BuildStream(e) => write!(f, "cpal build stream error: {}", e),
+            AudioError::PlayStream(e) => write!(f, "cpal play stream error: {}", e),
+            AudioError::PauseStream(e) => write!(f, "cpal pause stream error: {}", e),
+            AudioError::NoDevice => write!(f, "No audio output device available"),
+            AudioError::InvalidConfig => write!(f, "Invalid stream configuration"),
+            AudioError::NotStarted => write!(f, "Playback not started"),
+        }
+    }
+}
+
+impl std::error::Error for AudioError {}
+
+impl From<cpal::StreamError> for AudioError {
+    fn from(err: cpal::StreamError) -> Self {
+        AudioError::Stream(err)
+    }
+}
+
+impl From<cpal::DevicesError> for AudioError {
+    fn from(err: cpal::DevicesError) -> Self {
+        AudioError::Device(err)
+    }
+}
+
+impl From<cpal::BackendSpecificError> for AudioError {
+    fn from(err: cpal::BackendSpecificError) -> Self {
+        AudioError::Backend(err)
+    }
+}
+
+impl From<cpal::DefaultStreamConfigError> for AudioError {
+    fn from(err: cpal::DefaultStreamConfigError) -> Self {
+        AudioError::DefaultConfig(err)
+    }
+}
+
+impl From<cpal::BuildStreamError> for AudioError {
+    fn from(err: cpal::BuildStreamError) -> Self {
+        AudioError::BuildStream(err)
+    }
+}
+
+impl From<cpal::PlayStreamError> for AudioError {
+    fn from(err: cpal::PlayStreamError) -> Self {
+        AudioError::PlayStream(err)
+    }
+}
+
+impl From<cpal::PauseStreamError> for AudioError {
+    fn from(err: cpal::PauseStreamError) -> Self {
+        AudioError::PauseStream(err)
+    }
 }
 
 /// Audio playback and master clock.

@@ -5,17 +5,26 @@ use std::path::Path;
 use crate::decode::decoder::VideoFrame;
 
 /// Error type for encoding operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum EncodeError {
-    #[error("FFmpeg error: {0}")]
     FFmpeg(String),
-    #[error("File creation failed: {0}")]
     FileCreation(String),
-    #[error("Encoding failed: {0}")]
     Encoding(String),
-    #[error("Invalid parameters: {0}")]
     InvalidParameters(String),
 }
+
+impl std::fmt::Display for EncodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EncodeError::FFmpeg(msg) => write!(f, "FFmpeg error: {}", msg),
+            EncodeError::FileCreation(msg) => write!(f, "File creation failed: {}", msg),
+            EncodeError::Encoding(msg) => write!(f, "Encoding failed: {}", msg),
+            EncodeError::InvalidParameters(msg) => write!(f, "Invalid parameters: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for EncodeError {}
 
 /// Video encoder for exporting to MP4 (H.264 + AAC)
 pub struct Encoder {
