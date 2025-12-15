@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ffmpeg-next = "6.1"
+ffmpeg-next = "7.1"
 wgpu = "0.20"
 winit = "0.30"
 egui = "0.27"
@@ -13,4 +13,5 @@ cpal = "0.15"
 crossbeam = "0.8"
 tokio = { version = "1.0", features = ["rt", "sync"] }
 thiserror = "1.0"
+pollster = "0.3"
 

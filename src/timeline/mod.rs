@@ -1,5 +1,6 @@
 pub mod clip;
 pub mod track;
+#[allow(clippy::module_inception)]
 pub mod timeline;
 
 pub use clip::{Clip, ClipId};

@@ -33,7 +33,7 @@ impl FrameCache {
     }
 
     /// Create a frame cache with default settings (±1 second window, max 1000 frames)
-    pub fn default() -> Self {
+    pub fn with_default_settings() -> Self {
         Self::new(
             crate::core::time::constants::NANOS_PER_SECOND, // 1 second window
             1000
@@ -116,6 +116,12 @@ impl FrameCache {
     /// Check if the cache is empty
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
+    }
+}
+
+impl Default for FrameCache {
+    fn default() -> Self {
+        FrameCache::with_default_settings()
     }
 }
 

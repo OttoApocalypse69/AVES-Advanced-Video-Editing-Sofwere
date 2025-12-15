@@ -79,7 +79,7 @@ impl ExportPipeline {
         let duration_seconds = ns_to_seconds(duration_ns);
         let frame_duration_seconds = 1.0 / self.settings.fps;
         let frame_duration_ns = seconds_to_ns(frame_duration_seconds);
-        let total_frames = (duration_seconds * self.settings.fps).ceil() as usize;
+        let _total_frames = (duration_seconds * self.settings.fps).ceil() as usize;
 
         // Create decoders for all source files
         let mut decoders: std::collections::HashMap<std::path::PathBuf, Decoder> = 
@@ -99,7 +99,7 @@ impl ExportPipeline {
             decoders.insert(
                 path.clone(),
                 Decoder::new(path)
-                    .map_err(|e| ExportError::Decode(e))?,
+                    .map_err(ExportError::Decode)?,
             );
         }
 

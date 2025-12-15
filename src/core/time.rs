@@ -1,9 +1,6 @@
 //! Time representation using nanoseconds for frame-accurate video editing.
 //! Per SPEC.md: Time unit is nanoseconds (i64), with audio as master clock.
 
-use std::fmt;
-use std::ops::{Add, Sub};
-
 /// Time in nanoseconds since timeline start
 /// This is the core time representation throughout the application
 pub type Time = i64;

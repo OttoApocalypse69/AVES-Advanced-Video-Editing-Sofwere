@@ -3,9 +3,8 @@
 
 use wgpu::*;
 use winit::window::Window;
-use crate::decode::decoder::VideoFrame;
 use crate::render::texture::Texture;
-use crate::render::renderer::{Layer, Transform};
+use crate::render::renderer::Layer;
 use crate::render::shader::{compile_shader, VERTEX_SHADER, FRAGMENT_SHADER};
 
 /// Error type for compositor operations
@@ -50,9 +49,12 @@ impl Compositor {
             ..Default::default()
         });
 
-        let surface = instance
+        // SAFETY: Surface doesn't actually hold a reference to the window after creation.
+        // It's an owned value. The 'static lifetime is safe because the surface is owned by Compositor.
+        let surface_raw = instance
             .create_surface(window)
             .map_err(|e| CompositorError::Surface(e.to_string()))?;
+        let surface: Surface<'static> = unsafe { std::mem::transmute(surface_raw) };
 
         let adapter = pollster::block_on(instance.request_adapter(&RequestAdapterOptions {
             power_preference: PowerPreference::default(),
@@ -64,8 +66,8 @@ impl Compositor {
         let (device, queue) = pollster::block_on(adapter.request_device(
             &DeviceDescriptor {
                 label: None,
-                features: Features::empty(),
-                limits: Limits::default(),
+                required_features: Features::empty(),
+                required_limits: Limits::default(),
             },
             None,
         ))
@@ -88,6 +90,7 @@ impl Compositor {
             present_mode: surface_caps.present_modes[0],
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
+            desired_maximum_frame_latency: 2,
         };
 
         surface.configure(&device, &surface_config);
@@ -151,13 +154,13 @@ impl Compositor {
             layout: Some(&render_pipeline_layout),
             vertex: VertexState {
                 module: &vertex_shader,
-                entry_point: Some("vs_main"),
+                entry_point: "vs_main",
                 buffers: &[],
                 compilation_options: PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
                 module: &shader,
-                entry_point: Some("fs_main"),
+                entry_point: "fs_main",
                 targets: &[Some(ColorTargetState {
                     format: surface_config.format,
                     // Alpha blending for opacity support
@@ -193,7 +196,6 @@ impl Compositor {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-            cache: None,
         });
 
         Ok(Self {
@@ -233,7 +235,7 @@ impl Compositor {
             });
             
             {
-                let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                let _render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                     label: Some("Clear Pass"),
                     color_attachments: &[Some(RenderPassColorAttachment {
                         view: &view,
@@ -288,32 +290,8 @@ impl Compositor {
             .texture
             .create_view(&TextureViewDescriptor::default());
 
-        // Create command encoder
-        let mut encoder = self
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
-
-        // Begin render pass
-        let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-            label: Some("Render Pass"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(Color::BLACK),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            occlusion_query_set: None,
-            timestamp_writes: None,
-        });
-
-        render_pass.set_pipeline(&self.render_pipeline);
-
-        // Render each layer
+        // Pre-create all bind groups so they live long enough (before render_pass)
+        let mut bind_groups = Vec::with_capacity(layers.len());
         for (i, layer) in layers.iter().enumerate() {
             let texture = &self.texture_cache[i];
             
@@ -357,11 +335,41 @@ impl Compositor {
                     },
                 ],
             });
-
-            render_pass.set_bind_group(0, &bind_group, &[]);
-            render_pass.draw(0..3, 0..1);
+            bind_groups.push(bind_group);
         }
 
+        // Create command encoder
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+        // Begin render pass
+        let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(Color::BLACK),
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+
+        render_pass.set_pipeline(&self.render_pipeline);
+
+        // Render each layer using the pre-created bind groups
+        for bind_group in &bind_groups {
+            render_pass.set_bind_group(0, bind_group, &[]);
+            render_pass.draw(0..3, 0..1);
+        }
+        
+        // Explicitly drop render_pass to release borrow on encoder
         drop(render_pass);
 
         self.queue.submit(std::iter::once(encoder.finish()));

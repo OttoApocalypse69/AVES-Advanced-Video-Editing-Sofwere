@@ -20,12 +20,19 @@ pub enum EncodeError {
 /// Video encoder for exporting to MP4 (H.264 + AAC)
 pub struct Encoder {
     output_path: std::path::PathBuf,
+    #[allow(dead_code)]
     width: u32,
+    #[allow(dead_code)]
     height: u32,
+    #[allow(dead_code)]
     fps: f64,
+    #[allow(dead_code)]
     video_bitrate: u64,
+    #[allow(dead_code)]
     audio_bitrate: u64,
+    #[allow(dead_code)]
     sample_rate: u32,
+    #[allow(dead_code)]
     channels: u32,
     // FFmpeg context would be stored here as an opaque pointer
     // In real implementation: inner: *mut FFmpegContext
@@ -34,6 +41,7 @@ pub struct Encoder {
 
 impl Encoder {
     /// Create a new encoder for MP4 export
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         output_path: &Path,
         width: u32,
@@ -66,7 +74,7 @@ impl Encoder {
     }
 
     /// Encode a video frame
-    pub fn encode_video_frame(&mut self, frame: &VideoFrame) -> Result<(), EncodeError> {
+    pub fn encode_video_frame(&mut self, _frame: &VideoFrame) -> Result<(), EncodeError> {
         // TODO: Encode frame using FFmpeg
         // This would involve unsafe FFmpeg API calls:
         // - Convert RGBA8 to YUV420P if needed
@@ -79,7 +87,7 @@ impl Encoder {
     }
 
     /// Encode audio samples (interleaved PCM f32 per SPEC.md)
-    pub fn encode_audio_samples(&mut self, samples: &[f32]) -> Result<(), EncodeError> {
+    pub fn encode_audio_samples(&mut self, _samples: &[f32]) -> Result<(), EncodeError> {
         // TODO: Encode audio samples using FFmpeg
         // This would involve unsafe FFmpeg API calls:
         // - Convert f32 samples to encoder format if needed

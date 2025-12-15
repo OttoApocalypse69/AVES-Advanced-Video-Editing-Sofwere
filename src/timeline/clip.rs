@@ -153,7 +153,6 @@ impl Clip {
             return false;
         }
 
-        let old_duration = self.duration();
         self.out_point = new_out_point;
         let new_duration = self.duration();
         self.timeline_end = self.timeline_start + new_duration;

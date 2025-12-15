@@ -53,7 +53,7 @@ impl AudioMixer {
         // Get the audio clip at the start time
         if let Some(clip) = self.timeline.audio_track.clip_at(start_time) {
             // Get decoder for this clip's source
-            let decoder = decoders
+            let _decoder = decoders
                 .entry(clip.source_path.clone())
                 .or_insert_with(|| {
                     Decoder::new(&clip.source_path)
@@ -61,7 +61,7 @@ impl AudioMixer {
                 });
 
             // Convert timeline position to source position
-            if let Some(source_time) = clip.timeline_to_source(start_time) {
+            if let Some(_source_time) = clip.timeline_to_source(start_time) {
                 // TODO: Decode audio samples from source
                 // This would involve:
                 // 1. Seeking decoder to source_time

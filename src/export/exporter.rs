@@ -6,8 +6,8 @@ use std::path::Path;
 use std::collections::{HashMap, HashSet};
 use crate::timeline::Timeline;
 use crate::core::time::{Time, from_seconds, to_seconds};
-use crate::export::encoder::{Encoder, EncodeError};
-use crate::decode::decoder::{Decoder, DecodeError, VideoFrame, AudioFrame};
+use crate::export::encoder::Encoder;
+use crate::decode::decoder::{Decoder, DecodeError, VideoFrame};
 use crate::export::pipeline::{ExportSettings, ExportError};
 
 /// Exporter for offline rendering of timeline to MP4
@@ -91,7 +91,6 @@ impl Exporter {
         
         // Calculate audio samples per frame
         let samples_per_frame = (self.settings.sample_rate as f64 * frame_duration_seconds) as usize;
-        let samples_per_channel = samples_per_frame / self.settings.channels as usize;
 
         // Collect all unique source paths
         let mut source_paths = HashSet::new();
@@ -114,7 +113,6 @@ impl Exporter {
 
         // Audio sample accumulation buffer
         let mut audio_buffer: Vec<f32> = Vec::new();
-        let mut audio_buffer_time_ns: Time = 0;
 
         // Export frame by frame (using nanosecond timestamps, not frame numbers)
         let mut timeline_time_ns: Time = 0;
@@ -169,7 +167,7 @@ impl Exporter {
             );
 
             // Decode audio samples from overlapping clips
-            for audio_clip in audio_clips {
+            for audio_clip in &audio_clips {
                 // Calculate overlap range in timeline time
                 let clip_start = audio_clip.timeline_start.max(timeline_time_ns);
                 let clip_end = audio_clip.timeline_end.min(frame_end_time_ns);

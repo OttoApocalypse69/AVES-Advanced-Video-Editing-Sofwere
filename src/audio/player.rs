@@ -3,7 +3,7 @@
 //! Video frames sync to audio clock.
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Device, Host, SampleFormat, SampleRate, StreamConfig};
+use cpal::{Device, Host, StreamConfig};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -17,6 +17,14 @@ use crate::decode::decoder::Decoder;
 pub enum AudioPlayerError {
     #[error("cpal error: {0}")]
     Cpal(#[from] cpal::StreamError),
+    #[error("cpal default config error: {0}")]
+    DefaultConfig(#[from] cpal::DefaultStreamConfigError),
+    #[error("cpal build stream error: {0}")]
+    BuildStream(#[from] cpal::BuildStreamError),
+    #[error("cpal play stream error: {0}")]
+    PlayStream(#[from] cpal::PlayStreamError),
+    #[error("cpal pause stream error: {0}")]
+    PauseStream(#[from] cpal::PauseStreamError),
     #[error("Mixer error: {0}")]
     Mixer(#[from] MixerError),
     #[error("No audio device available")]
@@ -26,7 +34,7 @@ pub enum AudioPlayerError {
 /// Audio player using cpal
 /// This is the MASTER CLOCK for the entire application (per SPEC.md)
 pub struct AudioPlayer {
-    host: Host,
+    _host: Host,
     device: Device,
     stream_config: StreamConfig,
     mixer: AudioMixer,
@@ -36,7 +44,7 @@ pub struct AudioPlayer {
     master_clock: Arc<AtomicI64>,
     playback_start: Option<Instant>,
     timeline_start_position: Time,
-    decoders: std::collections::HashMap<std::path::PathBuf, Decoder>,
+    _decoders: std::collections::HashMap<std::path::PathBuf, Decoder>,
 }
 
 impl AudioPlayer {
@@ -55,7 +63,7 @@ impl AudioPlayer {
         let mixer = AudioMixer::new(timeline, sample_rate, channels);
 
         Ok(Self {
-            host,
+            _host: host,
             device,
             stream_config,
             mixer,
@@ -63,7 +71,7 @@ impl AudioPlayer {
             master_clock: Arc::new(AtomicI64::new(0)),
             playback_start: None,
             timeline_start_position: 0,
-            decoders: std::collections::HashMap::new(),
+            _decoders: std::collections::HashMap::new(),
         })
     }
 
@@ -80,7 +88,6 @@ impl AudioPlayer {
 
         let master_clock = Arc::clone(&self.master_clock);
         let sample_rate = self.stream_config.sample_rate.0;
-        let timeline_clone = self.mixer.timeline.clone();
         let stream_config_clone = self.stream_config.clone();
 
         let stream = self.device.build_output_stream(

@@ -79,7 +79,7 @@ pub struct AudioStreamInfo {
 /// Media decoder with FFmpeg backend
 /// All unsafe FFmpeg operations are isolated within this struct
 pub struct MediaDecoder {
-    path: PathBuf,
+    _path: PathBuf,
     // FFmpeg contexts (opaque pointers, accessed only via unsafe blocks)
     inner: Arc<FFmpegContext>,
 }
@@ -114,7 +114,7 @@ impl MediaDecoder {
         let inner = unsafe { Self::open_ffmpeg_context(path)? };
         
         Ok(Self {
-            path: path.to_path_buf(),
+            _path: path.to_path_buf(),
             inner: Arc::new(inner),
         })
     }
@@ -180,7 +180,7 @@ impl MediaDecoder {
                 }
 
                 // Allocate codec context
-                let codec_ctx = ffmpeg::ffi::avcodec_alloc_context3(codec);
+                let mut codec_ctx = ffmpeg::ffi::avcodec_alloc_context3(codec);
                 if codec_ctx.is_null() {
                     continue;
                 }
@@ -215,7 +215,7 @@ impl MediaDecoder {
                 }
 
                 // Allocate codec context
-                let codec_ctx = ffmpeg::ffi::avcodec_alloc_context3(codec);
+                let mut codec_ctx = ffmpeg::ffi::avcodec_alloc_context3(codec);
                 if codec_ctx.is_null() {
                     continue;
                 }
@@ -255,7 +255,7 @@ impl MediaDecoder {
                 width,
                 height,
                 ffmpeg::ffi::AVPixelFormat::AV_PIX_FMT_RGBA,
-                ffmpeg::ffi::SwsFlags::SWS_BILINEAR,
+                2, // SWS_BILINEAR flag
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
@@ -276,22 +276,31 @@ impl MediaDecoder {
             let sample_rate = (*codec_ctx).sample_rate;
             let channels = (*codec_ctx).ch_layout.nb_channels;
             
-            let swr = ffmpeg::ffi::swr_alloc();
+            let mut swr = ffmpeg::ffi::swr_alloc();
             if swr.is_null() {
                 None
             } else {
                 // Set input parameters
-                ffmpeg::ffi::av_opt_set_chlayout(swr, b"in_chlayout\0".as_ptr() as *const i8, &(*codec_ctx).ch_layout, 0);
-                ffmpeg::ffi::av_opt_set_int(swr, b"in_sample_rate\0".as_ptr() as *const i8, sample_rate as i64, 0);
-                ffmpeg::ffi::av_opt_set_sample_fmt(swr, b"in_sample_fmt\0".as_ptr() as *const i8, sample_fmt, 0);
-                
-                // Set output parameters (f32 interleaved - AV_SAMPLE_FMT_FLT)
-                let mut out_ch_layout = ffmpeg::ffi::AVChannelLayout::default();
-                ffmpeg::ffi::av_channel_layout_copy(&mut out_ch_layout, &(*codec_ctx).ch_layout);
-                ffmpeg::ffi::av_opt_set_chlayout(swr, b"out_chlayout\0".as_ptr() as *const i8, &out_ch_layout, 0);
-                ffmpeg::ffi::av_opt_set_int(swr, b"out_sample_rate\0".as_ptr() as *const i8, sample_rate as i64, 0);
-                // AV_SAMPLE_FMT_FLT is f32 interleaved (per SPEC.md)
-                ffmpeg::ffi::av_opt_set_sample_fmt(swr, b"out_sample_fmt\0".as_ptr() as *const i8, ffmpeg::ffi::AVSampleFormat::AV_SAMPLE_FMT_FLT, 0);
+                // Cast SwrContext to *mut c_void for av_opt_set_* functions
+                let swr_void = swr as *mut std::ffi::c_void;
+                // FFmpeg requires nul-terminated C strings - these are safe as they're compile-time constants
+                // Using byte string literals with explicit nul termination for FFmpeg API
+                #[allow(clippy::unnecessary_cast, clippy::transmute_bytes_to_str)]
+                {
+                    ffmpeg::ffi::av_opt_set_chlayout(swr_void, b"in_chlayout\0".as_ptr() as *const i8, &(*codec_ctx).ch_layout, 0);
+                    ffmpeg::ffi::av_opt_set_int(swr_void, b"in_sample_rate\0".as_ptr() as *const i8, sample_rate as i64, 0);
+                    ffmpeg::ffi::av_opt_set_sample_fmt(swr_void, b"in_sample_fmt\0".as_ptr() as *const i8, sample_fmt, 0);
+                    
+                    // Set output parameters (f32 interleaved - AV_SAMPLE_FMT_FLT)
+                    let mut out_ch_layout = std::mem::zeroed::<ffmpeg::ffi::AVChannelLayout>();
+                    // channels is u32, but av_channel_layout_default expects i32
+                    let channel_count = channels as i32;
+                    ffmpeg::ffi::av_channel_layout_default(&mut out_ch_layout, channel_count);
+                    ffmpeg::ffi::av_opt_set_chlayout(swr_void, b"out_chlayout\0".as_ptr() as *const i8, &out_ch_layout, 0);
+                    ffmpeg::ffi::av_opt_set_int(swr_void, b"out_sample_rate\0".as_ptr() as *const i8, sample_rate as i64, 0);
+                    // AV_SAMPLE_FMT_FLT is f32 interleaved (per SPEC.md)
+                    ffmpeg::ffi::av_opt_set_sample_fmt(swr_void, b"out_sample_fmt\0".as_ptr() as *const i8, ffmpeg::ffi::AVSampleFormat::AV_SAMPLE_FMT_FLT, 0);
+                }
                 
                 let ret = ffmpeg::ffi::swr_init(swr);
                 if ret < 0 {
@@ -580,9 +589,11 @@ impl MediaDecoder {
                     }
 
                     // Convert to RGBA8
+                    // Cast data pointers to const for sws_scale
+                    let src_data = (*frame).data.as_ptr() as *const *const u8;
                     ffmpeg_next::ffi::sws_scale(
                         sws_ctx,
-                        (*frame).data.as_ptr(),
+                        src_data,
                         (*frame).linesize.as_ptr(),
                         0,
                         height as i32,
@@ -596,7 +607,7 @@ impl MediaDecoder {
 
                     // Extract RGBA8 data
                     let linesize = (*rgb_frame).linesize[0] as usize;
-                    let mut data = vec![0u8; (linesize * height as usize)];
+                    let mut data = vec![0u8; linesize * height as usize];
                     for y in 0..height as usize {
                         let src = (*rgb_frame).data[0].add(y * linesize);
                         let dst = data.as_mut_ptr().add(y * linesize);
@@ -714,11 +725,13 @@ impl MediaDecoder {
                     let mut out_planes: [*mut u8; 8] = [std::ptr::null_mut(); 8];
                     out_planes[0] = out_samples.as_mut_ptr() as *mut u8;
 
+                    // Cast input data pointer to const for swr_convert
+                    let in_data = (*frame).data.as_ptr() as *const *const u8;
                     let ret = ffmpeg_next::ffi::swr_convert(
                         swr_ctx,
                         out_planes.as_mut_ptr(),
                         max_out_samples as i32,
-                        (*frame).data.as_ptr(),
+                        in_data,
                         nb_samples as i32,
                     );
 
@@ -803,15 +816,15 @@ impl Drop for FFmpegContext {
             }
 
             // Free SwrContext
-            if let Some(swr) = self.swr_ctx {
+            if let Some(mut swr) = self.swr_ctx {
                 ffmpeg_next::ffi::swr_free(&mut swr);
             }
 
             // Free codec contexts
-            if let Some(ctx) = self.video_codec_ctx {
+            if let Some(mut ctx) = self.video_codec_ctx {
                 ffmpeg_next::ffi::avcodec_free_context(&mut ctx);
             }
-            if let Some(ctx) = self.audio_codec_ctx {
+            if let Some(mut ctx) = self.audio_codec_ctx {
                 ffmpeg_next::ffi::avcodec_free_context(&mut ctx);
             }
 

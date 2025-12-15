@@ -3,9 +3,8 @@
 //! Per SPEC.md: Video decode output is RGBA8, Audio decode output is interleaved PCM f32
 
 use std::path::{Path, PathBuf};
-use std::ffi::CString;
 use crate::core::time::Time;
-use crate::decode::stream_info::{StreamInfo, VideoStreamInfo, AudioStreamInfo};
+use crate::decode::stream_info::{VideoStreamInfo, AudioStreamInfo};
 
 /// Error type for decoding operations
 #[derive(Debug, thiserror::Error)]
@@ -45,7 +44,7 @@ pub struct AudioFrame {
 /// Safe wrapper around FFmpeg decoder
 /// All unsafe FFmpeg operations are contained within this struct
 pub struct Decoder {
-    path: PathBuf,
+    _path: PathBuf,
     // FFmpeg context would be stored here as an opaque pointer
     // For now, we'll use a placeholder structure
     // In real implementation, this would be: inner: *mut FFmpegContext
@@ -69,13 +68,13 @@ impl Decoder {
         // - avcodec_open2
         
         Ok(Self {
-            path: path.to_path_buf(),
+            _path: path.to_path_buf(),
             _inner: (),
         })
     }
 
     /// Get video stream information
-    pub fn get_video_stream_info(&self, stream_index: usize) -> Result<VideoStreamInfo, DecodeError> {
+    pub fn get_video_stream_info(&self, _stream_index: usize) -> Result<VideoStreamInfo, DecodeError> {
         // TODO: Extract video stream info from FFmpeg context
         // This would involve unsafe FFmpeg API calls to read codec parameters
         
@@ -84,7 +83,7 @@ impl Decoder {
     }
 
     /// Get audio stream information
-    pub fn get_audio_stream_info(&self, stream_index: usize) -> Result<AudioStreamInfo, DecodeError> {
+    pub fn get_audio_stream_info(&self, _stream_index: usize) -> Result<AudioStreamInfo, DecodeError> {
         // TODO: Extract audio stream info from FFmpeg context
         
         // Placeholder implementation
@@ -109,7 +108,7 @@ impl Decoder {
     }
 
     /// Seek to a specific timestamp in the source (nanoseconds)
-    pub fn seek(&mut self, timestamp: Time, stream_index: usize) -> Result<(), DecodeError> {
+    pub fn seek(&mut self, _timestamp: Time, _stream_index: usize) -> Result<(), DecodeError> {
         // TODO: Implement FFmpeg seeking
         // This would involve unsafe FFmpeg API calls:
         // - av_seek_frame or avformat_seek_file
@@ -121,7 +120,7 @@ impl Decoder {
 
     /// Decode the next video frame from the specified stream
     /// Returns RGBA8 format as per SPEC.md
-    pub fn decode_next_video_frame(&mut self, stream_index: usize) -> Result<Option<VideoFrame>, DecodeError> {
+    pub fn decode_next_video_frame(&mut self, _stream_index: usize) -> Result<Option<VideoFrame>, DecodeError> {
         // TODO: Implement video frame decoding
         // This would involve unsafe FFmpeg API calls:
         // - av_read_frame
@@ -136,7 +135,7 @@ impl Decoder {
 
     /// Decode the next audio frame from the specified stream
     /// Returns interleaved PCM f32 as per SPEC.md
-    pub fn decode_next_audio_frame(&mut self, stream_index: usize) -> Result<Option<AudioFrame>, DecodeError> {
+    pub fn decode_next_audio_frame(&mut self, _stream_index: usize) -> Result<Option<AudioFrame>, DecodeError> {
         // TODO: Implement audio frame decoding
         // This would involve unsafe FFmpeg API calls:
         // - av_read_frame

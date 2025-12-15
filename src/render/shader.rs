@@ -4,6 +4,7 @@ use wgpu::*;
 
 /// Transform uniform buffer structure (must match TransformUniform in compositor.rs)
 /// Layout: position[2], scale[2], opacity, padding, output_size[2], frame_size[2], padding2[2]
+#[allow(dead_code)]
 #[repr(C)]
 struct TransformUniform {
     position: [f32; 2],

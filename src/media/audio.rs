@@ -113,7 +113,7 @@
 //!    - Sufficient for MVP (per spec)
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Device, Host, Stream, StreamConfig};
+use cpal::{Device, Stream, StreamConfig};
 use std::sync::atomic::{AtomicI64, AtomicBool, Ordering};
 use std::sync::Arc;
 use crate::core::time::{Time, from_seconds};
@@ -124,9 +124,17 @@ pub enum AudioError {
     #[error("cpal stream error: {0}")]
     Stream(#[from] cpal::StreamError),
     #[error("cpal device error: {0}")]
-    Device(#[from] cpal::DeviceError),
+    Device(#[from] cpal::DevicesError),
     #[error("cpal backend error: {0}")]
     Backend(#[from] cpal::BackendSpecificError),
+    #[error("cpal default config error: {0}")]
+    DefaultConfig(#[from] cpal::DefaultStreamConfigError),
+    #[error("cpal build stream error: {0}")]
+    BuildStream(#[from] cpal::BuildStreamError),
+    #[error("cpal play stream error: {0}")]
+    PlayStream(#[from] cpal::PlayStreamError),
+    #[error("cpal pause stream error: {0}")]
+    PauseStream(#[from] cpal::PauseStreamError),
     #[error("No audio output device available")]
     NoDevice,
     #[error("Invalid stream configuration")]

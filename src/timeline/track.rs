@@ -4,7 +4,6 @@
 use crate::timeline::clip::Clip;
 use crate::core::time::Time;
 use std::fmt;
-use std::path::PathBuf;
 
 /// Error type for track operations
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,6 +145,7 @@ impl Track {
 mod tests {
     use super::*;
     use crate::core::time;
+    use std::path::PathBuf;
 
     #[test]
     fn test_track_creation() {
