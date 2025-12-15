@@ -611,9 +611,30 @@ impl MediaDecoder {
                     };
 
                     if tx.send(video_frame).is_err() {
-                        return Ok(());  // Receiver dropped
+                        // Receiver dropped, clean up and exit
+                        if !packet.is_null() {
+                            ffmpeg_next::ffi::av_packet_free(&mut packet);
+                        }
+                        if !frame.is_null() {
+                            ffmpeg_next::ffi::av_frame_free(&mut frame);
+                        }
+                        if !rgb_frame.is_null() {
+                            ffmpeg_next::ffi::av_frame_free(&mut rgb_frame);
+                        }
+                        return Ok(());
                     }
                 }
+            }
+
+            // Clean up allocated resources
+            if !packet.is_null() {
+                ffmpeg_next::ffi::av_packet_free(&mut packet);
+            }
+            if !frame.is_null() {
+                ffmpeg_next::ffi::av_frame_free(&mut frame);
+            }
+            if !rgb_frame.is_null() {
+                ffmpeg_next::ffi::av_frame_free(&mut rgb_frame);
             }
 
             Ok(())
@@ -675,8 +696,17 @@ impl MediaDecoder {
 
                     // Convert to f32 interleaved using swresample
                     let nb_samples = (*frame).nb_samples as usize;
-                    // Allocate enough space for output (may need more due to resampling)
-                    let max_out_samples = (nb_samples as f64 * 1.5) as usize;
+                    
+                    // Calculate required output buffer size
+                    // swr_convert may need more space due to resampling, so we allocate generously
+                    let max_out_samples = ffmpeg_next::ffi::swr_get_out_samples(swr_ctx, nb_samples as i32);
+                    let max_out_samples = if max_out_samples > 0 {
+                        max_out_samples as usize
+                    } else {
+                        // Fallback: allocate 2x input samples if swr_get_out_samples fails
+                        nb_samples * 2
+                    };
+                    
                     let mut out_samples = vec![0f32; max_out_samples * channels as usize];
                     
                     // For interleaved format (AV_SAMPLE_FMT_FLT), we need array of pointers
@@ -714,6 +744,14 @@ impl MediaDecoder {
                         return Ok(());  // Receiver dropped
                     }
                 }
+            }
+
+            // Clean up allocated resources
+            if !packet.is_null() {
+                ffmpeg_next::ffi::av_packet_free(&mut packet);
+            }
+            if !frame.is_null() {
+                ffmpeg_next::ffi::av_frame_free(&mut frame);
             }
 
             Ok(())

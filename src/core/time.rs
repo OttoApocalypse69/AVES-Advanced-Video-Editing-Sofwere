@@ -68,6 +68,22 @@ pub fn from_frame_index(frame_index: usize, fps: f64) -> Time {
 /// Time zero constant
 pub const ZERO: Time = 0;
 
+/// Type alias for backward compatibility
+/// Some modules use Timestamp instead of Time
+pub type Timestamp = Time;
+
+/// Alias for from_seconds (for backward compatibility)
+#[inline]
+pub fn seconds_to_ns(seconds: f64) -> Time {
+    from_seconds(seconds)
+}
+
+/// Alias for to_seconds (for backward compatibility)
+#[inline]
+pub fn ns_to_seconds(nanos: Time) -> f64 {
+    to_seconds(nanos)
+}
+
 /// Format time as HH:MM:SS.mmm
 pub fn format_time(nanos: Time) -> String {
     let total_seconds = to_seconds(nanos);

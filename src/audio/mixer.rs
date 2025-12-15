@@ -1,7 +1,7 @@
 //! Audio mixing and synchronization.
 //! Per SPEC.md: Master clock is audio playback, audio drives timing.
 
-use crate::core::timeline::Timeline;
+use crate::timeline::Timeline;
 use crate::core::time::Time;
 use crate::audio::buffer::AudioBuffer;
 use crate::decode::decoder::Decoder;
@@ -17,9 +17,9 @@ pub enum MixerError {
 
 /// Audio mixer that combines audio from timeline tracks
 pub struct AudioMixer {
-    timeline: Timeline,
-    sample_rate: u32,
-    channels: u32,
+    pub timeline: Timeline,
+    pub sample_rate: u32,
+    pub channels: u32,
 }
 
 impl AudioMixer {

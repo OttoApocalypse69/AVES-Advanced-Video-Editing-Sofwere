@@ -2,7 +2,7 @@
 //! All unsafe FFmpeg code is isolated in this module.
 
 use std::path::Path;
-use crate::decode::decoder::Frame;
+use crate::decode::decoder::VideoFrame;
 
 /// Error type for encoding operations
 #[derive(Debug, thiserror::Error)]
@@ -66,7 +66,7 @@ impl Encoder {
     }
 
     /// Encode a video frame
-    pub fn encode_video_frame(&mut self, frame: &Frame) -> Result<(), EncodeError> {
+    pub fn encode_video_frame(&mut self, frame: &VideoFrame) -> Result<(), EncodeError> {
         // TODO: Encode frame using FFmpeg
         // This would involve unsafe FFmpeg API calls:
         // - Convert RGBA8 to YUV420P if needed

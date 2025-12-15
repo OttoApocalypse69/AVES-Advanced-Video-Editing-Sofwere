@@ -1,7 +1,7 @@
 //! Playback state machine.
 
 use std::time::Instant;
-use crate::core::time::Timestamp;
+use crate::core::time::Time;
 
 /// Playback state
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,15 +11,15 @@ pub enum PlaybackState {
     /// Playing - actively playing from a timeline position
     Playing {
         start_time: Instant,
-        timeline_start: Timestamp,  // nanoseconds
+        timeline_start: Time,  // nanoseconds
     },
     /// Paused - playback paused at a specific position
     Paused {
-        timeline_position: Timestamp,  // nanoseconds
+        timeline_position: Time,  // nanoseconds
     },
     /// Seeking - transitioning to a new position
     Seeking {
-        target: Timestamp,  // nanoseconds
+        target: Time,  // nanoseconds
     },
 }
 
@@ -45,7 +45,7 @@ impl PlaybackState {
     }
 
     /// Get the current timeline position based on state (nanoseconds)
-    pub fn current_position(&self) -> Timestamp {
+    pub fn current_position(&self) -> Time {
         match self {
             PlaybackState::Stopped => 0,
             PlaybackState::Playing { start_time, timeline_start } => {

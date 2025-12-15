@@ -4,28 +4,11 @@
 
 use std::path::Path;
 use std::collections::{HashMap, HashSet};
-use crate::core::timeline::Timeline;
+use crate::timeline::Timeline;
 use crate::core::time::{Time, from_seconds, to_seconds};
 use crate::export::encoder::{Encoder, EncodeError};
 use crate::decode::decoder::{Decoder, DecodeError, VideoFrame, AudioFrame};
 use crate::export::pipeline::{ExportSettings, ExportError};
-
-// Temporary Frame type to work around encoder.rs interface issue
-// TODO: Update encoder.rs to accept VideoFrame directly or define Frame properly
-#[derive(Debug, Clone)]
-struct Frame {
-    data: Vec<u8>,
-    width: u32,
-    height: u32,
-}
-
-fn create_frame_from_video_frame(vf: &VideoFrame) -> Frame {
-    Frame {
-        data: vf.data.clone(),
-        width: vf.width,
-        height: vf.height,
-    }
-}
 
 /// Exporter for offline rendering of timeline to MP4
 /// 
@@ -37,6 +20,25 @@ fn create_frame_from_video_frame(vf: &VideoFrame) -> Frame {
 /// 
 /// Frame pacing: Each frame represents a fixed duration (1/fps seconds).
 /// Timeline time advances by frame_duration_ns for each frame.
+/// 
+/// Sync behavior:
+/// - Video frames are decoded at exact timeline timestamps
+/// - Audio samples are accumulated per frame duration
+/// - Audio/video sync is maintained by encoding audio samples that correspond
+///   to each video frame's time range
+/// - Frame-perfect output: every frame at the target FPS is encoded
+/// 
+/// Error handling:
+/// - Decode errors for individual frames are logged and result in black frames
+/// - Audio decode errors result in silence for that time range
+/// - Encoder errors propagate and abort the export
+/// - Timeline errors (missing decoders, invalid mappings) abort the export
+/// 
+/// Known limitations:
+/// - Frame scaling is not implemented (relies on encoder)
+/// - Audio resampling is not implemented (assumes source matches export settings)
+/// - No support for multiple overlapping clips (takes first clip found)
+/// - Audio mixing for overlapping clips is simplified (volume only)
 pub struct Exporter {
     timeline: Timeline,
     settings: ExportSettings,
@@ -65,6 +67,8 @@ impl Exporter {
     /// - Decode video frame at timeline_time_ns
     /// - Accumulate audio samples for frame_duration_ns duration
     /// - Encode when enough samples accumulated
+    /// 
+    /// Returns Ok(()) on success, Err(ExportError) on failure.
     pub fn export<P: AsRef<Path>>(&self, output_path: P) -> Result<(), ExportError> {
         let output_path = output_path.as_ref();
 
@@ -135,13 +139,7 @@ impl Exporter {
                             let scaled_frame = self.scale_frame_if_needed(&frame)?;
                             
                             // Encode video frame
-                            // Note: Encoder expects Frame type which doesn't exist yet
-                            // This is a workaround - encoder.rs needs to be updated to accept VideoFrame
-                            // For now, we'll need to update encoder.rs to define Frame or accept VideoFrame
-                            // TODO: Fix encoder interface to accept VideoFrame directly
-                            // Temporary: create a simple frame wrapper
-                            let frame_wrapper = create_frame_from_video_frame(&scaled_frame);
-                            encoder.encode_video_frame(&frame_wrapper)?;
+                            encoder.encode_video_frame(&scaled_frame)?;
                         }
                         Err(e) => {
                             // Log warning but continue - frame dropping allowed during export
@@ -186,8 +184,6 @@ impl Exporter {
                                 ))?;
                             
                             // Decode audio samples for this range
-                            // Note: This is a simplified approach - in practice, we'd need
-                            // to decode samples incrementally and handle resampling
                             match self.decode_audio_range(
                                 decoder,
                                 source_start_ns,
@@ -266,13 +262,18 @@ impl Exporter {
     }
 
     /// Scale frame to export resolution if dimensions don't match
+    /// 
+    /// Currently returns frame as-is. In a full implementation, this would
+    /// use FFmpeg's sws_scale to resize RGBA8 frames.
+    /// 
+    /// Known limitation: Frame scaling is not implemented.
     fn scale_frame_if_needed(&self, frame: &VideoFrame) -> Result<VideoFrame, ExportError> {
         if frame.width == self.settings.width && frame.height == self.settings.height {
             return Ok(frame.clone());
         }
 
-        // TODO: Implement frame scaling
-        // This would use FFmpeg's sws_scale or similar
+        // TODO: Implement frame scaling using FFmpeg sws_scale
+        // This would convert RGBA8 frame to target resolution
         // For now, return frame as-is (encoder should handle scaling)
         // In production, this should scale RGBA8 frame to target resolution
         Ok(frame.clone())
@@ -287,14 +288,16 @@ impl Exporter {
             height: self.settings.height,
             timestamp: 0, // Not used for encoding
         };
-        let frame_wrapper = create_frame_from_video_frame(&black_video_frame);
         
-        encoder.encode_video_frame(&frame_wrapper)
+        encoder.encode_video_frame(&black_video_frame)
             .map_err(ExportError::Encode)
     }
 
     /// Decode audio samples for a time range
     /// Returns interleaved PCM f32 samples
+    /// 
+    /// Known limitation: Audio resampling is not implemented.
+    /// Assumes source sample rate matches export settings.
     fn decode_audio_range(
         &self,
         decoder: &mut Decoder,
@@ -344,8 +347,9 @@ impl Exporter {
                            audio_frame.channels == self.settings.channels {
                             samples.extend_from_slice(&audio_frame.data[start_idx..end_idx]);
                         } else {
-                            // TODO: Implement resampling
+                            // TODO: Implement resampling using FFmpeg swr_convert
                             // For now, just take samples as-is (will cause issues if rates differ)
+                            eprintln!("Warning: Sample rate/channel mismatch - resampling not implemented");
                             samples.extend_from_slice(&audio_frame.data[start_idx..end_idx]);
                         }
                     }
@@ -382,5 +386,3 @@ impl Exporter {
         &mut self.settings
     }
 }
-
-

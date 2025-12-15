@@ -1,10 +1,9 @@
+//! Core types for the video editor.
+//! 
+//! This module provides the fundamental time representation used throughout the application.
+//! All time values are in nanoseconds (i64) as specified in SPEC.md.
+
 pub mod time;
-pub mod clip;
-pub mod track;
-pub mod timeline;
 
 // Re-export time type and common functions
-pub use time::{Time, ZERO};
-pub use clip::Clip;
-pub use track::{Track, TrackType};
-pub use timeline::Timeline;
+pub use time::{Time, Timestamp, ZERO};

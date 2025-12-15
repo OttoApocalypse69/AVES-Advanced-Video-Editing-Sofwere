@@ -1,5 +1,22 @@
 # Rust Video Editor – Shared Technical Spec (MVP)
 
+# 🔒 SPEC LOCK NOTICE
+
+This document is AUTHORITATIVE.
+
+Any change to this file requires:
+1. A version bump
+2. A written rationale
+3. Explicit approval by the Integrator (human)
+
+Agents are NOT allowed to:
+- Change time units
+- Add dependencies
+- Modify thread model
+- Expand scope
+
+Violations invalidate the submission.
+
 ## Project Scope
 - Minimal desktop video editor
 - Personal use 

@@ -1,8 +1,8 @@
 //! Export pipeline for rendering timeline to MP4 file.
 
 use std::path::Path;
-use crate::core::timeline::Timeline;
-use crate::core::time::{Timestamp, ns_to_seconds, seconds_to_ns};
+use crate::timeline::Timeline;
+use crate::core::time::{Time, ns_to_seconds, seconds_to_ns};
 use crate::export::encoder::{Encoder, EncodeError};
 use crate::decode::decoder::{Decoder, DecodeError};
 
@@ -104,7 +104,7 @@ impl ExportPipeline {
         }
 
         // Export frame by frame (using nanosecond timestamps, not frame numbers)
-        let mut timeline_time_ns: Timestamp = 0;
+        let mut timeline_time_ns: Time = 0;
         let mut frame_num = 0;
         
         while timeline_time_ns < duration_ns {
@@ -115,7 +115,7 @@ impl ExportPipeline {
                         .ok_or_else(|| ExportError::Timeline("Decoder not found".to_string()))?;
                     
                     // Decode frame
-                    match decoder.decode_frame_at(source_time_ns, video_clip.stream_index) {
+                    match decoder.decode_video_frame_at(source_time_ns, video_clip.stream_index) {
                         Ok(frame) => {
                             // TODO: Scale frame to export resolution if needed
                             encoder.encode_video_frame(&frame)?;

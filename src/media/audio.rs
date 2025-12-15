@@ -9,6 +9,108 @@
 //! This module provides a clean API for audio playback that exposes
 //! a monotonic playback timestamp in nanoseconds, usable by renderer
 //! and timeline modules for synchronization.
+//!
+//! # Public Clock API
+//!
+//! ## Core Functions
+//!
+//! - `AudioClock::new()` - Initialize audio device and clock
+//! - `start_playback(start_time_ns)` - Start playback from timeline position
+//! - `stop_playback()` - Stop playback (clock retains last position)
+//! - `pause()` / `resume()` - Pause/resume playback
+//! - `seek(position_ns)` - Jump to new timeline position
+//! - `current_time()` - Read current playback time (lock-free, any thread)
+//!
+//! ## Thread Safety
+//!
+//! - `current_time()`: Safe to call from any thread (lock-free atomic read)
+//! - Control methods (`start`, `stop`, `seek`, etc.): Call from single control thread
+//! - Audio callback: Runs in real-time audio thread (no blocking, no allocations)
+//!
+//! # Callback Design
+//!
+//! The audio callback (`build_output_stream`) is the heart of the master clock:
+//!
+//! 1. **Runs in real-time audio thread** (cpal's audio callback thread)
+//! 2. **Drives clock advancement**: Each callback advances clock by buffer duration
+//! 3. **No allocations**: Uses only stack variables and pre-allocated buffers
+//! 4. **No blocking**: All operations are lock-free atomics
+//! 5. **Handles underruns**: Fills with silence gracefully (no panic)
+//!
+//! Clock update formula:
+//! ```
+//! duration_nanos = (samples_per_channel / sample_rate) * 1e9
+//! new_time = current_time + duration_nanos
+//! ```
+//!
+//! # Sync Guarantees
+//!
+//! ## Monotonicity
+//!
+//! - **During playback**: Clock only increases (monotonic)
+//! - **During seek**: Clock may decrease (expected behavior)
+//! - **During pause**: Clock stops advancing (maintains position)
+//!
+//! ## Accuracy
+//!
+//! - Clock advances based on **actual samples played** (sample-accurate)
+//! - Time is calculated from buffer size and sample rate
+//! - No drift correction: clock follows audio hardware timing
+//!
+//! ## Thread Coordination
+//!
+//! - Render thread reads `current_time()` to sync video frames
+//! - Decode threads can read `current_time()` to determine what to decode
+//! - Control thread calls `seek()` to change position
+//! - All coordination is lock-free (atomic operations only)
+//!
+//! # Failure Modes
+//!
+//! ## Buffer Underruns
+//!
+//! **Behavior**: Callback fills buffer with silence (0.0)
+//! **Impact**: Audio drops out, but clock continues advancing
+//! **Recovery**: Automatic - next callback attempts to fill normally
+//! **No panic**: Underruns are handled gracefully
+//!
+//! ## Device Errors
+//!
+//! **Behavior**: Error callback logs message, stream may continue
+//! **Impact**: Playback may stop or degrade
+//! **Recovery**: Control thread should call `stop_playback()` and restart
+//! **No panic**: Errors are logged, not propagated
+//!
+//! ## No Audio Device
+//!
+//! **Behavior**: `AudioClock::new()` returns `AudioError::NoDevice`
+//! **Impact**: Cannot initialize audio playback
+//! **Recovery**: Application should handle gracefully (disable audio features)
+//! **No panic**: Error returned, not panicked
+//!
+//! ## Seek During Playback
+//!
+//! **Behavior**: Clock jumps to new position immediately
+//! **Impact**: Clock may decrease (non-monotonic during seek)
+//! **Recovery**: Clock resumes monotonic advancement from new position
+//! **No panic**: Seek is atomic and safe
+//!
+//! # Known Limitations
+//!
+//! 1. **No audio sample feeding**: Currently fills with silence
+//!    - Future: Samples will come from decode threads via channels (per spec)
+//!    - This requires integration with decode subsystem
+//!
+//! 2. **No drift correction**: Clock follows hardware timing exactly
+//!    - If hardware drifts, clock drifts (predictable behavior)
+//!    - Stability > perfect accuracy (per requirements)
+//!
+//! 3. **No buffer management**: Assumes cpal handles buffering
+//!    - Buffer size is determined by cpal/OS
+//!    - Larger buffers = more latency but fewer underruns
+//!
+//! 4. **Single device**: Uses default audio output device only
+//!    - No device selection or hot-plugging support
+//!    - Sufficient for MVP (per spec)
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, Stream, StreamConfig};
@@ -157,6 +259,7 @@ impl AudioClock {
         self.is_paused.store(false, Ordering::Relaxed);
 
         // Clone shared state for callback
+        // All state is Arc-wrapped for lock-free access from callback
         let master_clock = Arc::clone(&self.master_clock);
         let is_playing = Arc::clone(&self.is_playing);
         let is_paused = Arc::clone(&self.is_paused);
@@ -171,13 +274,17 @@ impl AudioClock {
                 // It is called whenever the audio system needs more samples
                 
                 // Check if we should be playing
+                // CRITICAL: All operations here are lock-free and allocation-free
+                // This callback runs in a real-time audio thread - no blocking allowed
                 if !is_playing.load(Ordering::Relaxed) || is_paused.load(Ordering::Relaxed) {
                     // Fill with silence when paused or stopped
+                    // Clock does NOT advance when paused - maintains position
                     data.fill(0.0);
                     return;
                 }
 
                 // Calculate duration of this buffer in nanoseconds
+                // This calculation is allocation-free and uses only stack variables
                 let samples_per_channel = data.len() / channels as usize;
                 let duration_seconds = samples_per_channel as f64 / sample_rate as f64;
                 let duration_nanos = from_seconds(duration_seconds);
@@ -185,17 +292,32 @@ impl AudioClock {
                 // Handle buffer underrun: if we don't have audio data, fill with silence
                 // This is graceful degradation - playback continues but with silence
                 // The clock still advances, maintaining sync
+                // CRITICAL: No allocations here - fill() operates on pre-allocated buffer
                 data.fill(0.0);
 
                 // Update master clock: advance by the duration of samples we're providing
                 // This makes the clock monotonic and accurate to actual playback
+                // We use Relaxed ordering because:
+                // 1. Clock updates are independent (no data dependencies)
+                // 2. Other threads only read (no write-write conflicts)
+                // 3. Maximum performance in real-time callback
+                //
+                // Clock monotonicity: During playback, clock only increases.
+                // Seek operations (called from control thread) can set clock to any value.
+                // This is acceptable - seek is an explicit position change.
                 let current_time = master_clock.load(Ordering::Relaxed);
                 let new_time = current_time + duration_nanos;
                 master_clock.store(new_time, Ordering::Relaxed);
             },
             |err| {
                 // Error callback: log but don't crash
+                // Underruns and other errors are handled gracefully
+                // The stream continues operating - stability > perfect audio
                 eprintln!("Audio stream error: {}", err);
+                // Note: We don't update is_playing here because:
+                // 1. Error callback runs in audio thread (no allocations/panics)
+                // 2. Control thread should handle recovery
+                // 3. Stream may recover automatically
             },
             None,
         )?;
@@ -280,12 +402,19 @@ impl AudioClock {
     /// # Behavior
     ///
     /// - Updates clock atomically (thread-safe)
-    /// - If playing, continues from new position
+    /// - If playing, continues from new position (clock advances from here)
     /// - If paused, updates position but remains paused
+    /// - Clock may decrease (non-monotonic) during seek - this is expected
+    ///
+    /// # Thread Safety
+    ///
+    /// Safe to call from control thread while callback is running.
+    /// The callback will see the new position on its next iteration.
     pub fn seek(&mut self, position_ns: Time) -> Result<(), AudioError> {
-        // Update timeline start position
+        // Update timeline start position atomically
         self.timeline_start.store(position_ns, Ordering::Relaxed);
-        // Update master clock to new position
+        // Update master clock to new position atomically
+        // This may cause clock to "jump" backwards, which is expected for seeks
         self.master_clock.store(position_ns, Ordering::Relaxed);
         Ok(())
     }
@@ -303,8 +432,15 @@ impl AudioClock {
     /// # Returns
     ///
     /// Current timeline position in nanoseconds. The value is monotonic
-    /// (only increases during playback) and represents the actual time
-    /// position based on samples played.
+    /// (only increases during playback, unless `seek()` is called) and represents
+    /// the actual time position based on samples played.
+    ///
+    /// # Sync Guarantees
+    ///
+    /// - Clock advances with each audio callback (sample-accurate)
+    /// - Monotonic during playback (never decreases unless seek)
+    /// - Thread-safe: can be read from any thread without locks
+    /// - Real-time safe: no allocations or blocking operations
     pub fn current_time(&self) -> Time {
         self.master_clock.load(Ordering::Relaxed)
     }

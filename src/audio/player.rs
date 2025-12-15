@@ -7,7 +7,7 @@ use cpal::{Device, Host, SampleFormat, SampleRate, StreamConfig};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use crate::core::timeline::Timeline;
+use crate::timeline::Timeline;
 use crate::core::time::Time;
 use crate::audio::mixer::{AudioMixer, MixerError};
 use crate::decode::decoder::Decoder;

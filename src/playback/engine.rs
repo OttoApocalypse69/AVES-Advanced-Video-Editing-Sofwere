@@ -3,10 +3,9 @@
 
 use crossbeam::channel;
 use std::thread;
-use crate::core::timeline::Timeline;
-use crate::core::time::Timestamp;
+use crate::timeline::Timeline;
+use crate::core::time::Time;
 use crate::audio::player::AudioPlayer;
-use crate::render::compositor::Compositor;
 use crate::decode::decoder::Decoder;
 use crate::decode::frame_cache::FrameCache;
 use crate::playback::state::PlaybackState;
@@ -18,7 +17,7 @@ pub enum PlaybackCommand {
     Play,
     Pause,
     Stop,
-    Seek(Timestamp),  // nanoseconds
+    Seek(Time),  // nanoseconds
     UpdateTimeline(Timeline),
 }
 
@@ -34,8 +33,6 @@ pub enum PlaybackResponse {
 pub enum PlaybackError {
     #[error("Audio error: {0}")]
     Audio(#[from] crate::audio::player::AudioPlayerError),
-    #[error("Render error: {0}")]
-    Render(#[from] crate::render::compositor::CompositorError),
     #[error("Decode error: {0}")]
     Decode(#[from] crate::decode::decoder::DecodeError),
     #[error("Thread error: {0}")]
@@ -47,7 +44,6 @@ pub struct PlaybackEngine {
     timeline: Timeline,
     state: PlaybackState,
     audio_player: AudioPlayer,
-    compositor: Compositor,
     sync_controller: SyncController,
     frame_cache: FrameCache,
     decoders: std::collections::HashMap<std::path::PathBuf, Decoder>,
@@ -60,7 +56,6 @@ impl PlaybackEngine {
     /// Create a new playback engine
     pub fn new(
         timeline: Timeline,
-        compositor: Compositor,
     ) -> Result<Self, PlaybackError> {
         let audio_player = AudioPlayer::new(timeline.clone())?;
         let sync_controller = SyncController::new();
@@ -70,7 +65,6 @@ impl PlaybackEngine {
             timeline,
             state: PlaybackState::Stopped,
             audio_player,
-            compositor,
             sync_controller,
             frame_cache,
             decoders: std::collections::HashMap::new(),
@@ -82,25 +76,25 @@ impl PlaybackEngine {
 
     /// Start the playback engine
     pub fn start(&mut self) -> Result<(), PlaybackError> {
-        let (command_tx, command_rx) = channel::unbounded();
-        let (response_tx, response_rx) = channel::unbounded();
+        let (command_tx, _command_rx) = channel::unbounded::<PlaybackCommand>();
+        let (_response_tx, response_rx) = channel::unbounded::<PlaybackResponse>();
 
         self.command_tx = Some(command_tx);
         self.response_rx = Some(response_rx);
 
         // Start video thread
         let master_clock = self.sync_controller.master_clock();
-        let mut compositor = self.compositor;
-        let mut frame_cache = self.frame_cache.clone();
-        let mut decoders = std::collections::HashMap::new();
+        let _frame_cache = self.frame_cache.clone();
 
         let video_thread = thread::spawn(move || {
             // Video rendering loop
             loop {
-                // Read master clock
-                let elapsed_ns = master_clock.load(std::sync::atomic::Ordering::Relaxed);
+                // Read master clock (use Acquire for proper synchronization)
+                let _elapsed_ns = master_clock.load(std::sync::atomic::Ordering::Acquire);
                 
                 // TODO: Get current timeline position, find clip, decode frame, render
+                // Rendering is done via the Renderer which is owned by the main thread
+                // Video frames are sent via channel to the render thread
                 // For now, just sleep to prevent busy-waiting
                 thread::sleep(std::time::Duration::from_millis(16)); // ~60 FPS
             }

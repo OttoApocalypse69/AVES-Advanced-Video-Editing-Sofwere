@@ -15,6 +15,7 @@ struct CacheKey {
 
 /// Seek-based frame cache
 /// Maintains a window of frames around the current playhead
+#[derive(Clone)]
 pub struct FrameCache {
     cache: HashMap<CacheKey, VideoFrame>,
     cache_window_size: Time,  // Time window to cache on each side of playhead (nanoseconds)
