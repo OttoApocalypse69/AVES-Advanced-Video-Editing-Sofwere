@@ -5,11 +5,18 @@
 
 use eframe::egui::*;
 use eframe::{App, CreationContext};
+use crate::timeline::Timeline;
+use crate::timeline::Clip;
+use crate::ui::{TimelineViewState, timeline_ui};
+use crate::core::time;
 
 /// Main editor application UI
 /// Defines the primary layout with placeholder panels for a video editor interface
 pub struct EditorApp {
-    // UI state will be added here as features are implemented
+    /// Timeline data structure containing tracks and clips
+    pub timeline: Timeline,
+    /// UI-specific view state for timeline visualization
+    pub view_state: TimelineViewState,
 }
 
 impl EditorApp {
@@ -17,8 +24,54 @@ impl EditorApp {
     /// 
     /// Called by eframe during application initialization.
     /// The CreationContext provides access to egui context and wgpu resources.
+    /// 
+    /// Initializes a dummy timeline for testing with:
+    /// - One video track with one clip
+    /// - One audio track with one clip
+    /// - Timebase: nanoseconds (1/1,000,000,000)
     pub fn new(_cc: &CreationContext<'_>) -> Self {
-        Self {}
+        // Create a new timeline (already has video_track and audio_track)
+        let mut timeline = Timeline::new();
+        
+        // Create a dummy video clip
+        // Clip: 5 seconds duration, starts at timeline position 0
+        // Source: from 0s to 5s in source file
+        let video_clip = Clip::new(
+            1, // clip id
+            std::path::PathBuf::from("dummy_video.mp4"),
+            time::from_seconds(0.0),      // in_point: start at 0s in source
+            time::from_seconds(5.0),      // out_point: end at 5s in source (5s duration)
+            time::from_seconds(0.0),      // timeline_start: place at 0s on timeline
+            0,                            // stream_index: first video stream
+        );
+        
+        // Create a dummy audio clip
+        // Clip: 5 seconds duration, starts at timeline position 0
+        // Source: from 0s to 5s in source file
+        let audio_clip = Clip::new(
+            2, // clip id
+            std::path::PathBuf::from("dummy_audio.mp4"),
+            time::from_seconds(0.0),      // in_point: start at 0s in source
+            time::from_seconds(5.0),     // out_point: end at 5s in source (5s duration)
+            time::from_seconds(0.0),     // timeline_start: place at 0s on timeline
+            0,                            // stream_index: first audio stream
+        );
+        
+        // Add clips to timeline
+        // Note: These operations can fail if clips overlap, but our dummy clips
+        // are at the same position which is valid (different tracks)
+        timeline.add_video_clip(video_clip)
+            .expect("Failed to add dummy video clip");
+        timeline.add_audio_clip(audio_clip)
+            .expect("Failed to add dummy audio clip");
+        
+        // Initialize view state with default values
+        let view_state = TimelineViewState::default();
+        
+        Self {
+            timeline,
+            view_state,
+        }
     }
 }
 
@@ -49,21 +102,19 @@ impl App for EditorApp {
                 });
             });
 
-        // Central panel: Contains viewers and timeline
-        CentralPanel::default().show(ctx, |ui| {
-            // Bottom panel inside central: Timeline
-            TopBottomPanel::bottom("timeline")
-                .resizable(true)
-                .default_height(200.0)
-                .show_inside(ui, |ui| {
-                    ui.vertical(|ui| {
-                        ui.label("Timeline");
-                        // Timeline content will be added here in the future
-                    });
-                });
+        // Bottom panel: Timeline
+        // Per SPEC_v1.0.md.md: Timeline → Tracks → Clips hierarchy
+        TopBottomPanel::bottom("timeline")
+            .resizable(true)
+            .default_height(200.0)
+            .show(ctx, |ui| {
+                // Call the timeline_ui function to render the timeline
+                // Pass self.timeline and self.view_state as required
+                timeline_ui(ui, &self.timeline, &mut self.view_state);
+            });
 
-            // Remaining central area: Program Viewer
-            // This is the area not occupied by the timeline panel
+        // Central panel: Program Viewer
+        CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Program Viewer");
                 // Video preview will be rendered here in the future
