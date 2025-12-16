@@ -5,10 +5,8 @@
 
 use eframe::egui::*;
 use eframe::{App, CreationContext};
-use crate::timeline::Timeline;
-use crate::timeline::Clip;
+use crate::core::{Timeline, Clip, time};
 use crate::ui::{TimelineViewState, timeline_ui};
-use crate::core::time;
 
 /// Main editor application UI
 /// Defines the primary layout with placeholder panels for a video editor interface

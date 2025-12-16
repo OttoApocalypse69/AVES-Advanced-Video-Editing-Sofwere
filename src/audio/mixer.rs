@@ -1,7 +1,7 @@
 //! Audio mixing and synchronization.
 //! Per SPEC.md: Master clock is audio playback, audio drives timing.
 
-use crate::timeline::Timeline;
+use crate::core::Timeline;
 use crate::core::time::Time;
 use crate::audio::buffer::AudioBuffer;
 use crate::decode::decoder::Decoder;

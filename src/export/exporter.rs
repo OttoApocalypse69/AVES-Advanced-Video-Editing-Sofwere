@@ -4,7 +4,7 @@
 
 use std::path::Path;
 use std::collections::{HashMap, HashSet};
-use crate::timeline::Timeline;
+use crate::core::Timeline;
 use crate::core::time::{Time, from_seconds, to_seconds};
 use crate::export::encoder::Encoder;
 use crate::decode::decoder::{Decoder, DecodeError, VideoFrame};

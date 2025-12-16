@@ -1,8 +1,8 @@
 //! Timeline data structure managing video and audio tracks.
 //! Per SPEC.md: Timeline → Tracks → Clips hierarchy.
 
-use crate::timeline::track::{Track, TrackType, TrackError};
-use crate::timeline::clip::{Clip, ClipId};
+use crate::core::track::{Track, TrackType, TrackError};
+use crate::core::clip::{Clip, ClipId};
 use crate::core::time::Time;
 
 /// Main timeline structure.

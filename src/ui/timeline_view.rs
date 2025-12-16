@@ -2,7 +2,7 @@
 //! Per SPEC_v1.0.md.md: Timeline → Tracks → Clips hierarchy.
 
 use eframe::egui::*;
-use crate::timeline::Timeline;
+use crate::core::Timeline;
 use crate::ui::TimelineViewState;
 use crate::core::time::{to_seconds, from_seconds};
 
@@ -137,35 +137,35 @@ pub fn timeline_ui(ui: &mut Ui, timeline: &Timeline, view_state: &mut TimelineVi
     }
     
     // Draw timeline content (simplified visualization)
-    // Calculate visible time range
-    let visible_time_range = if timeline.duration > 0 {
-        timeline.duration as f64 / view_state.zoom as f64
+    // Calculate visible time range in nanoseconds
+    let visible_time_range_ns = if timeline.duration > 0 {
+        (timeline.duration as f64 / view_state.zoom as f64) as i64
     } else {
-        10.0 // Default 10 seconds if timeline is empty
+        from_seconds(10.0) // Default 10 seconds if timeline is empty
     };
-    
-    let start_time = view_state.pan_nanos as f64;
-    let end_time = start_time + visible_time_range;
-    
+
+    let start_time_ns = view_state.pan_nanos;
+    let end_time_ns = start_time_ns + visible_time_range_ns;
+
     // Draw time markers
-    let time_marker_spacing = 1.0; // 1 second intervals
-    
+    let time_marker_spacing_ns = from_seconds(1.0); // 1 second intervals in nanoseconds
+
     // Calculate first marker time (aligned to spacing)
-    let mut current_time = (start_time / time_marker_spacing).floor() * time_marker_spacing;
-    
-    while current_time <= end_time {
-        let x = timeline_rect.left() + 
-                (((current_time - start_time) / visible_time_range) * timeline_rect.width() as f64) as f32;
-        
+    let mut current_time_ns = (start_time_ns / time_marker_spacing_ns) * time_marker_spacing_ns;
+
+    while current_time_ns <= end_time_ns {
+        let x = timeline_rect.left() +
+                (((current_time_ns - start_time_ns) as f64 / visible_time_range_ns as f64) * timeline_rect.width() as f64) as f32;
+
         if x >= timeline_rect.left() && x <= timeline_rect.right() {
             // Draw vertical line for time marker
             painter.line_segment(
                 [pos2(x, timeline_rect.top()), pos2(x, timeline_rect.bottom())],
                 Stroke::new(1.0, Color32::from_gray(100)),
             );
-            
+
             // Draw time label
-            let time_seconds = to_seconds(current_time as i64);
+            let time_seconds = to_seconds(current_time_ns);
             painter.text(
                 pos2(x + 2.0, timeline_rect.top() + 15.0),
                 Align2::LEFT_TOP,
@@ -174,17 +174,20 @@ pub fn timeline_ui(ui: &mut Ui, timeline: &Timeline, view_state: &mut TimelineVi
                 Color32::from_gray(200),
             );
         }
-        
-        current_time += time_marker_spacing;
+
+        current_time_ns += time_marker_spacing_ns;
+
+        // Safety break to prevent infinite loops in case of logic error
+        if time_marker_spacing_ns <= 0 { break; }
     }
-    
+
     // Draw clips (simplified)
     for clip in &timeline.video_track.clips {
-        let clip_start_x = timeline_rect.left() + 
-            (((clip.timeline_start as f64 - start_time) / visible_time_range) * timeline_rect.width() as f64) as f32;
-        let clip_end_x = timeline_rect.left() + 
-            (((clip.timeline_end as f64 - start_time) / visible_time_range) * timeline_rect.width() as f64) as f32;
-        
+        let clip_start_x = timeline_rect.left() +
+            (((clip.timeline_start - start_time_ns) as f64 / visible_time_range_ns as f64) * timeline_rect.width() as f64) as f32;
+        let clip_end_x = timeline_rect.left() +
+            (((clip.timeline_end - start_time_ns) as f64 / visible_time_range_ns as f64) * timeline_rect.width() as f64) as f32;
+
         if clip_end_x >= timeline_rect.left() && clip_start_x <= timeline_rect.right() {
             let clip_rect = Rect::from_min_max(
                 pos2(clip_start_x, timeline_rect.top() + 20.0),
@@ -193,13 +196,13 @@ pub fn timeline_ui(ui: &mut Ui, timeline: &Timeline, view_state: &mut TimelineVi
             painter.rect_filled(clip_rect, 2.0, Color32::from_rgb(100, 150, 255));
         }
     }
-    
+
     for clip in &timeline.audio_track.clips {
-        let clip_start_x = timeline_rect.left() + 
-            (((clip.timeline_start as f64 - start_time) / visible_time_range) * timeline_rect.width() as f64) as f32;
-        let clip_end_x = timeline_rect.left() + 
-            (((clip.timeline_end as f64 - start_time) / visible_time_range) * timeline_rect.width() as f64) as f32;
-        
+        let clip_start_x = timeline_rect.left() +
+            (((clip.timeline_start - start_time_ns) as f64 / visible_time_range_ns as f64) * timeline_rect.width() as f64) as f32;
+        let clip_end_x = timeline_rect.left() +
+            (((clip.timeline_end - start_time_ns) as f64 / visible_time_range_ns as f64) * timeline_rect.width() as f64) as f32;
+
         if clip_end_x >= timeline_rect.left() && clip_start_x <= timeline_rect.right() {
             let clip_rect = Rect::from_min_max(
                 pos2(clip_start_x, timeline_rect.top() + 70.0),
@@ -208,10 +211,11 @@ pub fn timeline_ui(ui: &mut Ui, timeline: &Timeline, view_state: &mut TimelineVi
             painter.rect_filled(clip_rect, 2.0, Color32::from_rgb(255, 150, 100));
         }
     }
-    
+
     // Draw playhead
-    let playhead_x = timeline_rect.left() + 
-        (((timeline.playhead as f64 - start_time) / visible_time_range) * timeline_rect.width() as f64) as f32;
+    let playhead_x = timeline_rect.left() +
+        (((timeline.playhead - start_time_ns) as f64 / visible_time_range_ns as f64) * timeline_rect.width() as f64) as f32;
+
     
     if playhead_x >= timeline_rect.left() && playhead_x <= timeline_rect.right() {
         painter.line_segment(

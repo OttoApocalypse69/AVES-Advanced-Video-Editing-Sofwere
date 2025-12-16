@@ -1,7 +1,7 @@
 //! Track data structure for managing clips on video/audio tracks.
 //! Per SPEC.md: Track types are Video and Audio.
 
-use crate::timeline::clip::Clip;
+use crate::core::clip::{Clip, ClipId};
 use crate::core::time::Time;
 use std::fmt;
 
@@ -9,7 +9,7 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TrackError {
     /// Clip overlaps with existing clips on the track
-    Overlap { clip_id: crate::timeline::clip::ClipId },
+    Overlap { clip_id: ClipId },
 }
 
 impl fmt::Display for TrackError {
@@ -88,7 +88,7 @@ impl Track {
     /// Remove a clip by ID.
     /// 
     /// Returns the removed clip if found, `None` otherwise.
-    pub fn remove_clip(&mut self, clip_id: crate::timeline::clip::ClipId) -> Option<Clip> {
+    pub fn remove_clip(&mut self, clip_id: ClipId) -> Option<Clip> {
         if let Some(pos) = self.clips.iter().position(|c| c.id == clip_id) {
             Some(self.clips.remove(pos))
         } else {

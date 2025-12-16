@@ -3,7 +3,7 @@
 
 use crossbeam::channel;
 use std::thread;
-use crate::timeline::Timeline;
+use crate::core::Timeline;
 use crate::core::time::Time;
 use crate::audio::player::AudioPlayer;
 use crate::decode::decoder::Decoder;

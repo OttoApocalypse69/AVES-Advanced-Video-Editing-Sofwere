@@ -1,7 +1,7 @@
 //! Export pipeline for rendering timeline to MP4 file.
 
 use std::path::Path;
-use crate::timeline::Timeline;
+use crate::core::Timeline;
 use crate::core::time::{Time, ns_to_seconds, seconds_to_ns};
 use crate::export::encoder::{Encoder, EncodeError};
 use crate::decode::decoder::{Decoder, DecodeError};
